@@ -103,5 +103,5 @@ async def main():
 # =========================
 # 🚀 正确入口
 # =========================
-if name == "main":
+if __name__ == "__main__":
     asyncio.run(main())
