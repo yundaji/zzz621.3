@@ -5,14 +5,17 @@ from utils import load_channels, load_sent, save_sent
 from config import BOT_TOKEN, CSV_URL
 
 
-# 👉 自动文章池（建议后面改成列表页抓取）
-URLS = [
-    "https://www.mhwmm.com/miandianxinwen/81512.html",
-    "https://www.mhwmm.com/miandianxinwen/81511.html",
-    "https://www.mhwmm.com/miandianxinwen/81510.html",
-    "https://www.mhwmm.com/miandianxinwen/81509.html",
-    "https://www.mhwmm.com/miandianxinwen/81508.html",
-]
+# =========================
+# 🧠 文章池（唯一来源）
+# =========================
+def get_pool():
+    return [
+        "https://www.mhwmm.com/miandianxinwen/81512.html",
+        "https://www.mhwmm.com/miandianxinwen/81511.html",
+        "https://www.mhwmm.com/miandianxinwen/81510.html",
+        "https://www.mhwmm.com/miandianxinwen/81509.html",
+        "https://www.mhwmm.com/miandianxinwen/81508.html",
+    ]
 
 
 async def main():
@@ -22,37 +25,32 @@ async def main():
     channels = load_channels(CSV_URL)
     sent = load_sent()
 
-    # ✅ 过滤已发送
-    pool = [u for u in URLS if u not in sent]
+    pool = [u for u in get_pool() if u not in sent]
 
     if not pool:
-        print("没有可发送文章")
+        print("没有可用文章")
         return
 
-    pool_index = 0
+    channel_index = 0
 
-    # 🔥 核心：所有频道共享文章池
-    for channel_cfg in channels:
+    # =========================
+    # 🔥 核心：文章驱动分发
+    # =========================
+    for url in pool:
 
-        channel = channel_cfg["channel"]
-        count = int(channel_cfg.get("count", 1))
+        article = get_article(url)
 
-        for _ in range(count):
+        # 👉 轮流选择频道
+        channel = channels[channel_index % len(channels)]["channel"]
 
-            if pool_index >= len(pool):
-                print("文章不够分配")
-                return
+        await send_post(channel, article)
 
-            url = pool[pool_index]
-            pool_index += 1
+        print(f"已发送：{url} -> {channel}")
 
-            article = get_article(url)
+        # ✔ 全局去重锁定
+        save_sent(url)
 
-            await send_post(channel, article)
-
-            print(f"发送成功：{channel} -> {url}")
-
-            save_sent(url)
+        channel_index += 1
 
 
 if __name__ == "__main__":
