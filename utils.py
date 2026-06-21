@@ -1,20 +1,71 @@
-import pandas as pd
 import os
+import requests
+import pandas as pd
+from io import StringIO
 
 
+# =========================
+# 📌 读取频道（稳定增强版）
+# =========================
 def load_channels(csv_url):
-    df = pd.read_csv(csv_url)
+    try:
+        # 用 requests 更稳定（比 pandas 直接读 URL 稳）
+        r = requests.get(csv_url, timeout=20)
+        r.raise_for_status()
 
-    # 假设列名：channel / count
-    return df.to_dict("records")
+        content = r.text.strip()
+
+        # 读取 CSV
+        df = pd.read_csv(StringIO(content))
+
+        # 统一列名小写（避免 Channel / channel 问题）
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        # 必须包含 channel
+        if "channel" not in df.columns:
+            raise ValueError("CSV必须包含 channel 列")
+
+        # count 可选
+        if "count" not in df.columns:
+            df["count"] = 1
+
+        # 清理数据
+        df = df.dropna(subset=["channel"])
+
+        channels = []
+
+        for _, row in df.iterrows():
+            channel = str(row["channel"]).strip()
+
+            if not channel:
+                continue
+
+            channels.append({
+                "channel": channel,
+                "count": int(row["count"]) if str(row["count"]).isdigit() else 1
+            })
+
+        return channels
+
+    except Exception as e:
+        print("❌ 读取CSV失败：", e)
+        return []
 
 
+# =========================
+# 📌 已发送记录
+# =========================
 def load_sent():
     if not os.path.exists("sent.txt"):
         return set()
-    return set(open("sent.txt").read().splitlines())
+
+    with open("sent.txt", "r", encoding="utf-8") as f:
+        return set(f.read().splitlines())
 
 
+# =========================
+# 📌 保存已发送
+# =========================
 def save_sent(url):
-    with open("sent.txt", "a") as f:
+    with open("sent.txt", "a", encoding="utf-8") as f:
         f.write(url + "\n")
