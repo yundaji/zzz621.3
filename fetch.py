@@ -13,6 +13,7 @@ def clean_text(text):
         "邮箱",
         "mhwmm.com",
         "十一新闻周刊"
+        "伊江树报道",
     ]
 
     return not any(k in text for k in bad_keywords)
