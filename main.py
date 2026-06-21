@@ -1,12 +1,12 @@
 import asyncio
 from fetch import get_article
 from tg import init, send_post
-from utils import load_channels, load_sent, save_sent
+from utils import load_channels, load_sent, save_sent, is_sent
 from config import BOT_TOKEN, CSV_URL
 
 
 # =========================
-# 🧠 全站文章池（动态）
+# 🧠 文章池（自动抓取）
 # =========================
 def get_pool():
     import requests
@@ -19,8 +19,6 @@ def get_pool():
     headers = {"User-Agent": "Mozilla/5.0"}
 
     r = requests.get(url, headers=headers, timeout=15)
-    r.encoding = "utf-8"
-
     soup = BeautifulSoup(r.text, "lxml")
 
     urls = []
@@ -38,33 +36,30 @@ def get_pool():
         urls.append(full_url)
 
     # 去重
-    urls = list(dict.fromkeys(urls))
-
-    print(f"✅ 文章池数量：{len(urls)}")
-
-    return urls
+    return list(dict.fromkeys(urls))
 
 
+# =========================
+# 🚀 主程序
+# =========================
 async def main():
 
     init(BOT_TOKEN)
 
-    # =========================
     # 📌 读取频道
-    # =========================
     channels = load_channels(CSV_URL)
     sent = load_sent()
 
-    print(f"✅ 读取频道数量：{len(channels)}")
+    print(f"✅ 频道数量：{len(channels)}")
 
     if not channels:
-        print("❌ 没有读取到频道")
+        print("❌ 没有频道")
         return
 
-    # =========================
-    # 📌 获取文章池
-    # =========================
-    pool = [u for u in get_pool() if u not in sent]
+    pool = get_pool()
+
+    # 📌 过滤已发送
+    pool = [u for u in pool if not is_sent(u)]
 
     if not pool:
         print("没有可用文章")
@@ -96,12 +91,12 @@ async def main():
 
         channel_index += 1
 
-        # 🔥 防止 Telegram 限流
+        # 🔥 防止 Telegram 限速
         await asyncio.sleep(1)
 
 
 # =========================
-# 🚀 正确入口
+# 🚀 入口
 # =========================
 if __name__ == "__main__":
     asyncio.run(main())
