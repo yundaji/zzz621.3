@@ -5,11 +5,11 @@ from io import StringIO
 
 
 # =========================
-# 📌 读取频道（稳定增强版）
+# 📌 读取频道（稳定版）
 # =========================
 def load_channels(csv_url):
     try:
-        # 用 requests 更稳定（比 pandas 直接读 URL 稳）
+        # 🔥 用 requests 拉 CSV（比 pandas 直接读 URL 更稳定）
         r = requests.get(csv_url, timeout=20)
         r.raise_for_status()
 
@@ -18,18 +18,17 @@ def load_channels(csv_url):
         # 读取 CSV
         df = pd.read_csv(StringIO(content))
 
-        # 统一列名小写（避免 Channel / channel 问题）
+        # 🔥 统一列名（避免 Channel / channel 不一致）
         df.columns = [c.strip().lower() for c in df.columns]
 
-        # 必须包含 channel
+        # 必须字段检查
         if "channel" not in df.columns:
-            raise ValueError("CSV必须包含 channel 列")
+            raise ValueError("CSV 必须包含 channel 列")
 
-        # count 可选
         if "count" not in df.columns:
             df["count"] = 1
 
-        # 清理数据
+        # 删除空数据
         df = df.dropna(subset=["channel"])
 
         channels = []
@@ -44,6 +43,8 @@ def load_channels(csv_url):
                 "channel": channel,
                 "count": int(row["count"]) if str(row["count"]).isdigit() else 1
             })
+
+        print(f"✅ 读取频道成功：{len(channels)} 个")
 
         return channels
 
