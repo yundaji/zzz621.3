@@ -5,37 +5,52 @@ from io import StringIO
 
 
 # =========================
-# 📌 读取频道
+# 📌 读取频道（稳定版）
 # =========================
 def load_channels(csv_url):
+    try:
+        # 🔥 用 requests 拉 CSV（比 pandas 直接读 URL 更稳定）
+        r = requests.get(csv_url, timeout=20)
+        r.raise_for_status()
 
-    r = requests.get(csv_url, timeout=20)
-    r.raise_for_status()
+        content = r.text.strip()
 
-    df = pd.read_csv(StringIO(r.text))
+        # 读取 CSV
+        df = pd.read_csv(StringIO(content))
 
-    df.columns = [c.strip().lower() for c in df.columns]
+        # 🔥 统一列名（避免 Channel / channel 不一致）
+        df.columns = [c.strip().lower() for c in df.columns]
 
-    if "channel" not in df.columns:
-        raise ValueError("CSV必须包含 channel 列")
+        # 必须字段检查
+        if "channel" not in df.columns:
+            raise ValueError("CSV 必须包含 channel 列")
 
-    if "count" not in df.columns:
-        df["count"] = 1
+        if "count" not in df.columns:
+            df["count"] = 1
 
-    df = df.dropna(subset=["channel"])
+        # 删除空数据
+        df = df.dropna(subset=["channel"])
 
-    channels = []
+        channels = []
 
-    for _, row in df.iterrows():
-        ch = str(row["channel"]).strip()
+        for _, row in df.iterrows():
+            channel = str(row["channel"]).strip()
 
-        if ch:
+            if not channel:
+                continue
+
             channels.append({
-                "channel": ch,
+                "channel": channel,
                 "count": int(row["count"]) if str(row["count"]).isdigit() else 1
             })
 
-    return channels
+        print(f"✅ 读取频道成功：{len(channels)} 个")
+
+        return channels
+
+    except Exception as e:
+        print("❌ 读取CSV失败：", e)
+        return []
 
 
 # =========================
@@ -50,19 +65,8 @@ def load_sent():
 
 
 # =========================
-# 🚨 是否已发送
-# =========================
-def is_sent(url):
-    if not os.path.exists("sent.txt"):
-        return False
-
-    with open("sent.txt", "r", encoding="utf-8") as f:
-        return url.strip() in f.read().splitlines()
-
-
-# =========================
-# 💾 保存记录
+# 📌 保存已发送
 # =========================
 def save_sent(url):
     with open("sent.txt", "a", encoding="utf-8") as f:
-        f.write(url.strip() + "\n")
+        f.write(url + "\n")
