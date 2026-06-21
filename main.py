@@ -6,31 +6,64 @@ from config import BOT_TOKEN, CSV_URL
 
 
 # =========================
-# 🧠 文章池
+# 🧠 全站文章池（动态）
 # =========================
 def get_pool():
-    return [
-        "https://www.mhwmm.com/miandianxinwen/81512.html",
-        "https://www.mhwmm.com/miandianxinwen/81511.html",
-        "https://www.mhwmm.com/miandianxinwen/81510.html",
-        "https://www.mhwmm.com/miandianxinwen/81509.html",
-        "https://www.mhwmm.com/miandianxinwen/81508.html",
-    ]
+    import requests
+    from bs4 import BeautifulSoup
+    from urllib.parse import urljoin
+
+    url = "https://www.mhwmm.com/miandianxinwen.html"
+    base = "https://www.mhwmm.com"
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    r = requests.get(url, headers=headers, timeout=15)
+    r.encoding = "utf-8"
+
+    soup = BeautifulSoup(r.text, "lxml")
+
+    urls = []
+
+    for a in soup.find_all("a"):
+        href = a.get("href")
+
+        if not href:
+            continue
+
+        if "miandianxinwen" not in href:
+            continue
+
+        full_url = urljoin(base, href)
+        urls.append(full_url)
+
+    # 去重
+    urls = list(dict.fromkeys(urls))
+
+    print(f"✅ 文章池数量：{len(urls)}")
+
+    return urls
 
 
 async def main():
 
     init(BOT_TOKEN)
 
+    # =========================
+    # 📌 读取频道
+    # =========================
     channels = load_channels(CSV_URL)
     sent = load_sent()
 
     print(f"✅ 读取频道数量：{len(channels)}")
 
     if not channels:
-        print("❌ 没有频道")
+        print("❌ 没有读取到频道")
         return
 
+    # =========================
+    # 📌 获取文章池
+    # =========================
     pool = [u for u in get_pool() if u not in sent]
 
     if not pool:
@@ -41,7 +74,7 @@ async def main():
     channel_len = len(channels)
 
     # =========================
-    # 🔥 核心稳定分发逻辑
+    # 🔥 核心分发逻辑
     # =========================
     for url in pool:
 
@@ -53,6 +86,7 @@ async def main():
 
         try:
             await send_post(channel, article)
+
             print(f"✅ 已发送：{url} -> {channel}")
 
             save_sent(url)
@@ -60,13 +94,9 @@ async def main():
         except Exception as e:
             print(f"❌ 发送失败：{channel} -> {e}")
 
-            # ⚠️ 不影响整体继续
-            channel_index += 1
-            continue
-
         channel_index += 1
 
-        # 🔥 防止 Telegram 限流（非常重要）
+        # 🔥 防止 Telegram 限流
         await asyncio.sleep(1)
 
 
