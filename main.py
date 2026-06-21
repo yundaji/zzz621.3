@@ -25,13 +25,10 @@ async def main():
     channels = load_channels(CSV_URL)
     sent = load_sent()
 
-    # =========================
-    # 🚨 强制检查频道数量
-    # =========================
-    print(f"✅ 实际读取频道数量：{len(channels)}")
+    print(f"✅ 读取频道数量：{len(channels)}")
 
-    if len(channels) == 0:
-        print("❌ 没有读取到任何频道")
+    if not channels:
+        print("❌ 没有频道")
         return
 
     pool = [u for u in get_pool() if u not in sent]
@@ -40,30 +37,41 @@ async def main():
         print("没有可用文章")
         return
 
-    # =========================
-    # 🔥 核心优化：双循环防止只跑少数频道
-    # =========================
     channel_index = 0
     channel_len = len(channels)
 
+    # =========================
+    # 🔥 核心稳定分发逻辑
+    # =========================
     for url in pool:
 
         article = get_article(url)
 
-        # 👉 强制循环所有频道（关键修复）
         channel = channels[channel_index % channel_len]["channel"]
 
-        await send_post(channel, article)
+        print(f"准备发送：{url} -> {channel}")
 
-        print(f"已发送：{url} -> {channel}")
+        try:
+            await send_post(channel, article)
+            print(f"✅ 已发送：{url} -> {channel}")
 
-        save_sent(url)
+            save_sent(url)
+
+        except Exception as e:
+            print(f"❌ 发送失败：{channel} -> {e}")
+
+            # ⚠️ 不影响整体继续
+            channel_index += 1
+            continue
 
         channel_index += 1
 
-        # 🔥 防止 Telegram 限流（很重要）
+        # 🔥 防止 Telegram 限流（非常重要）
         await asyncio.sleep(1)
 
 
+# =========================
+# 🚀 正确入口
+# =========================
 if __name__ == "__main__":
     asyncio.run(main())
