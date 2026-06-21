@@ -1,63 +1,57 @@
 import asyncio
-import random
-
-from fetch import get_article, get_article_list
+from fetch import get_article
 from tg import init, send_post
 from utils import load_channels, load_sent, save_sent
 from config import BOT_TOKEN, CSV_URL
+
+
+# 👉 自动文章池（建议后面改成列表页抓取）
+URLS = [
+    "https://www.mhwmm.com/miandianxinwen/81512.html",
+    "https://www.mhwmm.com/miandianxinwen/81511.html",
+    "https://www.mhwmm.com/miandianxinwen/81510.html",
+    "https://www.mhwmm.com/miandianxinwen/81509.html",
+    "https://www.mhwmm.com/miandianxinwen/81508.html",
+]
 
 
 async def main():
 
     init(BOT_TOKEN)
 
-    # 频道配置
     channels = load_channels(CSV_URL)
+    sent = load_sent()
 
-    # 已发送去重池
-    sent = set(load_sent())
-
-    # 🧠 获取“文章池”（重点修复）
-    urls = get_article_list()
-
-    # ❗过滤已发送
-    pool = [u for u in urls if u not in sent]
+    # ✅ 过滤已发送
+    pool = [u for u in URLS if u not in sent]
 
     if not pool:
-        print("没有可发送的文章")
+        print("没有可发送文章")
         return
 
-    # 打乱顺序，避免重复模式
-    random.shuffle(pool)
+    pool_index = 0
 
-    # 🧠 记录每个频道分配的文章
-    channel_cursor = {c["channel"]: [] for c in channels}
+    # 🔥 核心：所有频道共享文章池
+    for channel_cfg in channels:
 
-    idx = 0
-
-    # 🔥 核心：给每个频道分配不同文章
-    for c in channels:
-
-        channel = c["channel"]
-        count = int(c.get("count", 1))
+        channel = channel_cfg["channel"]
+        count = int(channel_cfg.get("count", 1))
 
         for _ in range(count):
 
-            if idx >= len(pool):
-                print("文章不够分配了")
-                break
+            if pool_index >= len(pool):
+                print("文章不够分配")
+                return
 
-            url = pool[idx]
-            idx += 1
+            url = pool[pool_index]
+            pool_index += 1
 
             article = get_article(url)
 
             await send_post(channel, article)
 
-            print(f"已发送 {channel} -> {url}")
+            print(f"发送成功：{channel} -> {url}")
 
-            # 全局去重
-            sent.add(url)
             save_sent(url)
 
 
