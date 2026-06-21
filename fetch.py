@@ -1,13 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import random
 
 
 BASE_DOMAIN = "https://www.mhwmm.com"
 
 
 # =========================
-# ❌ 过滤垃圾文字
+# ❌ 过滤垃圾文本
 # =========================
 def is_bad_text(text: str) -> bool:
     bad_keywords = [
@@ -47,19 +48,17 @@ def get_article_list():
         if not href:
             continue
 
-        # 只保留新闻链接
         if "miandianxinwen" not in href:
             continue
 
         full_url = urljoin(BASE_DOMAIN, href)
         links.append(full_url)
 
-    # 去重
     return list(dict.fromkeys(links))
 
 
 # =========================
-# 📰 获取文章正文 + 图片
+# 📰 获取文章内容 + 随机图片
 # =========================
 def get_article(url):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -75,17 +74,16 @@ def get_article(url):
     title = soup.title.text.strip() if soup.title else ""
 
     # =========================
-    # 🧹 清理无关结构
+    # 🧹 清理无关标签
     # =========================
     for tag in soup(["script", "style", "footer", "nav", "header", "form", "aside"]):
         tag.decompose()
 
     # =========================
-    # 🧠 正文提取
+    # 🧠 正文（保留）
     # =========================
     content = []
 
-    # 优先抓 p 标签
     for p in soup.find_all("p"):
         text = p.get_text(strip=True)
 
@@ -100,50 +98,53 @@ def get_article(url):
 
         content.append(text)
 
-    # 去掉尾部垃圾（版权/来源）
+    # 去尾部垃圾
     while content and is_bad_text(content[-1]):
         content.pop()
 
     text = "\n".join(content)
 
     # =========================
-    # 🖼 正文图片（核心修复）
+    # 🖼 随机图片（核心修复）
     # =========================
     images = []
 
-    # 只在正文结构内找图片（更精准）
-    for block in soup.find_all(["p", "div"]):
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src")
 
-        for img in block.find_all("img"):
-            src = img.get("src") or img.get("data-src")
+        if not src:
+            continue
 
-            if not src:
-                continue
+        src_lower = src.lower()
 
-            src_lower = src.lower()
+        # ❌ 过滤无关图片
+        if any(x in src_lower for x in ["logo", "icon", "avatar", "qr", "wechat", "banner"]):
+            continue
 
-            # ❌ 过滤无关图片
-            if any(x in src_lower for x in ["logo", "icon", "avatar", "qr", "wechat", "banner"]):
-                continue
+        # ❌ base64
+        if "data:image" in src_lower:
+            continue
 
-            # ❌ base64 / 占位图
-            if "data:image" in src_lower or "base64" in src_lower:
-                continue
+        # ✅ 补全 URL
+        if src.startswith("//"):
+            src = "https:" + src
+        else:
+            src = urljoin(BASE_DOMAIN, src)
 
-            # ✅ 补全链接
-            if src.startswith("//"):
-                src = "https:" + src
-            else:
-                src = urljoin(BASE_DOMAIN, src)
-
-            images.append(src)
+        images.append(src)
 
     # 去重
     images = list(dict.fromkeys(images))
 
+    # 🔥 随机打乱（关键）
+    random.shuffle(images)
+
+    # 每篇最多3张随机图
+    images = images[:3]
+
     return {
         "title": title,
         "text": text[:4000],
-        "images": images[:3],
+        "images": images,
         "url": url
     }
