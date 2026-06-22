@@ -6,7 +6,7 @@ from config import BOT_TOKEN, CSV_URL
 
 
 # =========================
-# 🧠 全站文章池（动态）
+# 🧠 全站文章池
 # =========================
 def get_pool():
     import requests
@@ -19,8 +19,6 @@ def get_pool():
     headers = {"User-Agent": "Mozilla/5.0"}
 
     r = requests.get(url, headers=headers, timeout=15)
-    r.encoding = "utf-8"
-
     soup = BeautifulSoup(r.text, "lxml")
 
     urls = []
@@ -37,32 +35,27 @@ def get_pool():
         full_url = urljoin(base, href)
         urls.append(full_url)
 
-    # 去重
-    urls = list(dict.fromkeys(urls))
-
-    print(f"✅ 文章池数量：{len(urls)}")
-
-    return urls
+    return list(dict.fromkeys(urls))
 
 
+# =========================
+# 🚀 主程序
+# =========================
 async def main():
 
     init(BOT_TOKEN)
 
-    # =========================
-    # 📌 读取频道
-    # =========================
     channels = load_channels(CSV_URL)
     sent = load_sent()
 
-    print(f"✅ 读取频道数量：{len(channels)}")
+    print(f"频道数量：{len(channels)}")
 
     if not channels:
-        print("❌ 没有读取到频道")
+        print("❌ 没有频道")
         return
 
     # =========================
-    # 📌 获取文章池
+    # 📌 关键：过滤已发送
     # =========================
     pool = [u for u in get_pool() if u not in sent]
 
@@ -70,38 +63,45 @@ async def main():
         print("没有可用文章")
         return
 
-    channel_index = 0
-    channel_len = len(channels)
-
     # =========================
-    # 🔥 核心分发逻辑
+    # 🔥 核心：每个频道分配不同文章
     # =========================
-    for url in pool:
+    article_index = 0
+    pool_len = len(pool)
 
-        article = get_article(url)
+    for channel in channels:
 
-        channel = channels[channel_index % channel_len]["channel"]
+        channel_name = channel["channel"]
+        count = int(channel.get("count", 1))
 
-        print(f"准备发送：{url} -> {channel}")
+        for _ in range(count):
 
-        try:
-            await send_post(channel, article)
+            if article_index >= pool_len:
+                print("⚠️ 文章不够分配")
+                break
 
-            print(f"✅ 已发送：{url} -> {channel}")
+            url = pool[article_index]
+            article_index += 1
 
-            save_sent(url)
+            article = get_article(url)
 
-        except Exception as e:
-            print(f"❌ 发送失败：{channel} -> {e}")
+            print(f"发送：{url} -> {channel_name}")
 
-        channel_index += 1
+            try:
+                await send_post(channel_name, article)
 
-        # 🔥 防止 Telegram 限流
+                print(f"✅ 成功：{channel_name}")
+
+                save_sent(url)
+
+            except Exception as e:
+                print(f"❌ 失败：{channel_name} -> {e}")
+
         await asyncio.sleep(1)
 
 
 # =========================
-# 🚀 正确入口
+# 🚀 启动
 # =========================
 if __name__ == "__main__":
     asyncio.run(main())
